@@ -45,7 +45,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 jobs:
@@ -56,8 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - if: github.event_name == 'push'
-        uses: Anparasan3/gh-actions/dependabot@v0.1.0
-      - uses: Anparasan3/gh-actions@v0.1.0
+        uses: Anparasan3/gh-actions/dependabot@v0.1.1
+      - uses: Anparasan3/gh-actions@v0.1.1
 ```
 
 ### Action inputs
