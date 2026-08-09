@@ -20,6 +20,23 @@ opt out.
 
 `example-ci-workflow.yml`, `release/example-workflow.yml`, `pr-checks-example-caller.yml`, and `example-dependabot.yml` are **not actions** — they're files you copy into each project's `.github/` folder.
 
+## All toggles at a glance
+
+Every `true`/`false` option across both the CI action and PR Checks workflow, in one place:
+
+| Set in | `with:` key | Default | Set `false` when... / Set `true` when... |
+|---|---|---|---|
+| CI action (`action.yml`) | `install` | `true` | no dependencies to install (rare) |
+| CI action (`action.yml`) | `enable-lint` | `true` | no lint script in `package.json` |
+| CI action (`action.yml`) | `enable-test` | `true` | no test script in `package.json` |
+| CI action (`action.yml`) | `enable-build` | `true` | project has no build step |
+| PR Checks (`pr-checks.yml`) | `enable-jira-link` | `false` | → `true` to require/link a Jira ticket per PR |
+| PR Checks (`pr-checks.yml`) | `enable-coverage` | `true` | no test script / no coverage (lcov) output to report |
+| PR Checks (`pr-checks.yml`) | `enable-deploy` | `false` | → `true` to deploy to staging after tests pass |
+| PR Checks (`pr-checks.yml`) | `enable-healthcheck` | `false` | → `true` to curl a healthcheck URL after deploy (needs `enable-deploy: true` too) |
+
+Lint and test in **PR Checks** always run unconditionally — there's no toggle for those there (see [Toggles](#toggles) below). Full input/default/description tables: [Action inputs](#action-inputs) for the CI action, [Toggles](#toggles) + [Config inputs](#config-inputs) for PR Checks.
+
 ## Versioning — pin your usage
 
 Tag releases in **this** repo, then pin every calling project to a tag so changes here don't silently ripple into every project the moment you push to `main`:
@@ -58,6 +75,10 @@ jobs:
       - if: github.event_name == 'push'
         uses: Anparasan3/gh-actions/dependabot@v0.1.1
       - uses: Anparasan3/gh-actions@v0.1.1
+        with:
+          enable-lint: 'true'   # 'false' if no lint script
+          enable-test: 'true'   # 'false' if no test script
+          enable-build: 'true'  # 'false' if no build step
 ```
 
 ### Action inputs
