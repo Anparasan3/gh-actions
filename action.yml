@@ -17,7 +17,7 @@ inputs:
   enable-lint:
     description: 'Whether to run the lint script'
     required: false
-    default: 'true'
+    default: 'false'
   lint-script:
     description: 'package.json script to run for lint'
     required: false
