@@ -19,14 +19,5 @@ jobs:
         if: github.event_name == 'push'
         uses: Anparasan3/gh-actions/dependabot@v0.1.0
 
-      - name: Setup Bun & install deps
-        uses: Anparasan3/gh-actions/setup-bun@v0.1.0
-
-      - name: Lint
-        uses: Anparasan3/gh-actions/lint@v0.1.0
-
-      - name: Test
-        uses: Anparasan3/gh-actions/test@v0.1.0
-
-      - name: Build
-        uses: Anparasan3/gh-actions/build@v0.1.0
+      - name: Setup Bun, install deps, lint, test, build
+        uses: Anparasan3/gh-actions@v0.1.0

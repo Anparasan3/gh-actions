@@ -1,0 +1,80 @@
+name: 'CI'
+description: 'Sets up Bun, installs deps, and runs lint, test, and build scripts'
+
+inputs:
+  bun-version:
+    description: 'Bun version to install'
+    required: false
+    default: 'latest'
+  working-directory:
+    description: 'Directory containing package.json (relative to repo root)'
+    required: false
+    default: '.'
+  install:
+    description: 'Whether to run "bun install" after setup'
+    required: false
+    default: 'true'
+  enable-lint:
+    description: 'Whether to run the lint script'
+    required: false
+    default: 'true'
+  lint-script:
+    description: 'package.json script to run for lint'
+    required: false
+    default: 'lint'
+  enable-test:
+    description: 'Whether to run the test script'
+    required: false
+    default: 'true'
+  test-script:
+    description: 'package.json script to run for tests'
+    required: false
+    default: 'test'
+  enable-build:
+    description: 'Whether to run the build script'
+    required: false
+    default: 'true'
+  build-script:
+    description: 'package.json script to run for building'
+    required: false
+    default: 'build'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Cache Bun dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ hashFiles(format('{0}/bun.lockb', inputs.working-directory), format('{0}/bun.lock', inputs.working-directory)) }}
+        restore-keys: |
+          ${{ runner.os }}-bun-
+
+    - name: Install dependencies
+      if: inputs.install == 'true'
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash
+      run: bun install --frozen-lockfile
+
+    - name: Lint
+      if: inputs.enable-lint == 'true'
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash
+      run: bun run ${{ inputs.lint-script }}
+
+    - name: Test
+      if: inputs.enable-test == 'true'
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash
+      run: bun run ${{ inputs.test-script }}
+
+    - name: Build
+      if: inputs.enable-build == 'true'
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash
+      run: bun run ${{ inputs.build-script }}

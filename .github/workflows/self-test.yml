@@ -1,0 +1,86 @@
+name: Self Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: rhysd/actionlint-action@v1
+
+  test-ci-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create fixture project
+        run: |
+          mkdir -p /tmp/fixture
+          cat > /tmp/fixture/package.json <<'EOF'
+          {
+            "name": "fixture",
+            "version": "0.0.0",
+            "scripts": {
+              "lint": "touch ran-lint.txt",
+              "test": "touch ran-test.txt",
+              "build": "touch ran-build.txt"
+            }
+          }
+          EOF
+
+      - name: Run CI action with build disabled
+        uses: ./
+        with:
+          working-directory: /tmp/fixture
+          install: 'false'
+          enable-build: 'false'
+
+      - name: Assert lint/test ran and build was skipped
+        run: |
+          test -f /tmp/fixture/ran-lint.txt || { echo "lint did not run"; exit 1; }
+          test -f /tmp/fixture/ran-test.txt || { echo "test did not run"; exit 1; }
+          test ! -f /tmp/fixture/ran-build.txt || { echo "build ran despite enable-build: false"; exit 1; }
+
+  test-release-version-calc:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - existing_tag: 'v1.2.3'
+            bump: patch
+            expected: v1.2.4
+          - existing_tag: 'v1.2.3'
+            bump: minor
+            expected: v1.3.0
+          - existing_tag: 'v1.2.3'
+            bump: major
+            expected: v2.0.0
+          - existing_tag: ''
+            bump: patch
+            expected: v0.0.1
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Reset to a known tag state (local only, never pushed)
+        run: |
+          git tag -l | xargs -r git tag -d
+          if [ -n "${{ matrix.existing_tag }}" ]; then
+            git tag "${{ matrix.existing_tag }}"
+          fi
+
+      - name: Calculate next version
+        id: version
+        uses: ./release
+        with:
+          bump: ${{ matrix.bump }}
+
+      - name: Assert expected tag
+        run: |
+          test "${{ steps.version.outputs.tag }}" = "${{ matrix.expected }}" || {
+            echo "expected ${{ matrix.expected }}, got ${{ steps.version.outputs.tag }}"
+            exit 1
+          }

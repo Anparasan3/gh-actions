@@ -8,10 +8,7 @@ Repo: `Anparasan3/gh-actions`
 
 | Name | Path | Type | Purpose |
 |---|---|---|---|
-| Setup Bun | `setup-bun/` | composite action | Installs Bun, caches deps, `bun install` |
-| Lint | `lint/` | composite action | Runs your lint script |
-| Test | `test/` | composite action | Runs your test script |
-| Build | `build/` | composite action | Runs your build script |
+| CI (setup + lint + test + build) | `action.yml` (repo root) | composite action | Installs Bun, caches deps, `bun install`, then runs lint/test/build — one `uses:` line |
 | Release (version calc) | `release/` | composite action | Calculates the next semver tag from a bump type |
 | Dependabot bootstrap | `dependabot/` | composite action | Creates `.github/dependabot.yml` in the calling repo if it's missing |
 | PR Checks | `.github/workflows/pr-checks.yml` | **reusable workflow** | Jira link + lint + test + coverage (on by default) + deploy + healthcheck, fully toggleable |
@@ -34,7 +31,7 @@ git push origin v0.1.0
 
 Then in projects:
 ```yaml
-uses: Anparasan3/gh-actions/setup-bun@v0.1.0
+uses: Anparasan3/gh-actions@v0.1.0
 ```
 
 Bump the tag (`v0.1.1`, `v0.2.0`, ...) when you're ready to roll out changes deliberately, and update the version string in each project when you want it to pick up the change.
@@ -60,25 +57,23 @@ jobs:
       - uses: actions/checkout@v7
       - if: github.event_name == 'push'
         uses: Anparasan3/gh-actions/dependabot@v0.1.0
-      - uses: Anparasan3/gh-actions/setup-bun@v0.1.0
-      - uses: Anparasan3/gh-actions/lint@v0.1.0
-      - uses: Anparasan3/gh-actions/test@v0.1.0
-      - uses: Anparasan3/gh-actions/build@v0.1.0
+      - uses: Anparasan3/gh-actions@v0.1.0
 ```
 
-### Action inputs (setup-bun / lint / test / build)
+### Action inputs
 
 ```yaml
-- uses: Anparasan3/gh-actions/setup-bun@v0.1.0
+- uses: Anparasan3/gh-actions@v0.1.0
   with:
     bun-version: latest        # optional, default: latest
     working-directory: .       # optional, default: repo root
     install: 'true'            # optional, set 'false' to skip bun install
-
-- uses: Anparasan3/gh-actions/lint@v0.1.0    # same shape for test/build
-  with:
-    working-directory: .
-    script: lint                # override if your package.json script differs
+    enable-lint: 'true'        # optional, set 'false' to skip lint
+    lint-script: lint          # optional, override if your package.json script differs
+    enable-test: 'true'        # optional, set 'false' to skip test
+    test-script: test          # optional, override if your package.json script differs
+    enable-build: 'true'       # optional, set 'false' to skip build
+    build-script: build        # optional, override if your package.json script differs
 ```
 
 ## Quick start — Release in your project
@@ -179,3 +174,4 @@ Requires `permissions: contents: write` on the CI job (see `example-ci-workflow.
 - This repo must be **public** (or the calling repos need extra token/permission setup) — composite actions and reusable workflows referenced cross-repo via `uses:` need read access to this repo.
 - `actions/checkout` must always run before any composite action step that operates on the checked-out code.
 - Reusable workflows (`pr-checks.yml`) are referenced with the full path including `.github/workflows/`, unlike composite actions which reference a folder containing `action.yml`. Don't mix up the two `uses:` formats.
+- The root CI action is referenced with no subfolder (`Anparasan3/gh-actions@v0.1.0`), since its `action.yml` lives at the repo root — unlike `release/` and `dependabot/`, which are referenced as `Anparasan3/gh-actions/release@v0.1.0` / `Anparasan3/gh-actions/dependabot@v0.1.0`.
