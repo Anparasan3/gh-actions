@@ -73,8 +73,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - if: github.event_name == 'push'
-        uses: Anparasan3/gh-actions/dependabot@v0.1.1
-      - uses: Anparasan3/gh-actions@v0.1.1
+        uses: Anparasan3/gh-actions/dependabot@v0.1.2
+      - uses: Anparasan3/gh-actions@v0.1.2
         with:
           enable-lint: 'true'   # 'false' if no lint script
           enable-test: 'true'   # 'false' if no test script
