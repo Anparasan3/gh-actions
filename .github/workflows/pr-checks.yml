@@ -11,7 +11,7 @@ on:
       enable-coverage:
         description: 'Post a test coverage report as a PR comment'
         type: boolean
-        default: false
+        default: true
       enable-deploy:
         description: 'Deploy to staging after tests pass'
         type: boolean

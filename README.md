@@ -13,7 +13,13 @@ Repo: `Anparasan3/gh-actions`
 | Test | `test/` | composite action | Runs your test script |
 | Build | `build/` | composite action | Runs your build script |
 | Release (version calc) | `release/` | composite action | Calculates the next semver tag from a bump type |
-| PR Checks | `.github/workflows/pr-checks.yml` | **reusable workflow** | Jira link + lint + test + coverage + deploy + healthcheck, fully toggleable |
+| Dependabot bootstrap | `dependabot/` | composite action | Creates `.github/dependabot.yml` in the calling repo if it's missing |
+| PR Checks | `.github/workflows/pr-checks.yml` | **reusable workflow** | Jira link + lint + test + coverage (on by default) + deploy + healthcheck, fully toggleable |
+
+By default, a project wired up per the quick starts below gets lint + test always,
+coverage comments on by default, dependabot bootstrapped on first push to main/master, and
+releases auto-cut on every merge to main/master (patch bump) — see each section for how to
+opt out.
 
 `example-ci-workflow.yml`, `release/example-workflow.yml`, `pr-checks-example-caller.yml`, and `example-dependabot.yml` are **not actions** — they're files you copy into each project's `.github/` folder.
 
@@ -48,8 +54,12 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed only for the dependabot bootstrap step below
     steps:
       - uses: actions/checkout@v7
+      - if: github.event_name == 'push'
+        uses: Anparasan3/gh-actions/dependabot@v0.1.0
       - uses: Anparasan3/gh-actions/setup-bun@v0.1.0
       - uses: Anparasan3/gh-actions/lint@v0.1.0
       - uses: Anparasan3/gh-actions/test@v0.1.0
@@ -75,7 +85,8 @@ jobs:
 
 Copy `release/example-workflow.yml` into `your-project/.github/workflows/release.yml`. It:
 
-- Runs on manual dispatch (`workflow_dispatch`) with a `patch`/`minor`/`major` choice → calculates the next tag via the shared `release` action, pushes it, creates a GitHub Release.
+- Runs automatically on every merge to `main`/`master` → auto-bumps **patch**, tags, and creates a GitHub Release. No manual step needed. (Batch merges if a release per merge is too noisy for your project.)
+- Runs on manual dispatch (`workflow_dispatch`) with a `patch`/`minor`/`major` choice → use this when you need a minor/major bump instead of the automatic patch.
 - Runs on any `v*` tag pushed directly → just creates the GitHub Release for that tag.
 
 ## Quick start — PR Checks in your project
@@ -111,12 +122,12 @@ jobs:
       DEPLOY_ENV_VARS: ${{ secrets.DEPLOY_ENV_VARS }}
 ```
 
-### Toggles (all default to `false` except where noted)
+### Toggles
 
 | Input | Default | What it controls |
 |---|---|---|
 | `enable-jira-link` | `false` | Requires a `TICKET_PREFIX-123` style ticket in the PR title/body (blocks non-draft PRs without one) and links the PR to that Jira ticket |
-| `enable-coverage` | `false` | Posts a coverage report as a PR comment via `romeovs/lcov-reporter-action` |
+| `enable-coverage` | **`true`** | Posts a coverage report as a PR comment via `romeovs/lcov-reporter-action` |
 | `enable-deploy` | `false` | Runs a deploy script after tests pass |
 | `enable-healthcheck` | `false` | Curls a healthcheck URL after deploy — **only runs if `enable-deploy` is also `true`** |
 
@@ -148,10 +159,20 @@ All secrets are optional at the workflow level — only pass the ones your enabl
 
 ## Dependabot
 
-Dependabot config **cannot** be shared via `uses:` — it must live in each project's own `.github/dependabot.yml`. Copy `example-dependabot.yml` into every project that should get automated dependency PRs. It covers:
+Dependabot config **cannot** be shared via `uses:` — GitHub requires it to physically live in each project's own `.github/dependabot.yml`. There's no way around that platform constraint, but `example-ci-workflow.yml` includes a step that closes the gap automatically:
+
+```yaml
+- name: Ensure dependabot.yml exists
+  if: github.event_name == 'push'
+  uses: Anparasan3/gh-actions/dependabot@v0.1.0
+```
+
+On the first push to `main`/`master` after you wire up CI, this creates `.github/dependabot.yml` (if it's not already there) and commits+pushes it straight to that branch — no manual copy step. It covers:
 
 - **`bun`** ecosystem — updates `package.json` / `bun.lock` (requires a committed lockfile)
 - **`github-actions`** ecosystem — updates versioned `uses:` references, including bumping `Anparasan3/gh-actions@v0.1.0` itself once you cut new tags
+
+Requires `permissions: contents: write` on the CI job (see `example-ci-workflow.yml`) so it can push the file. If you'd rather commit it yourself upfront, copy `example-dependabot.yml` instead and skip the bootstrap step.
 
 ## Notes
 

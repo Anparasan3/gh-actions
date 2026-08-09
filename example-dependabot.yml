@@ -1,6 +1,9 @@
-# Copy this file into your project as .github/dependabot.yml
-# Dependabot config lives per-repo -- it cannot be "shared" via uses:,
-# so each project needs its own copy of this file.
+# Reference copy of what the `dependabot` composite action writes.
+# Dependabot config lives per-repo -- it cannot be "shared" via uses: --
+# but example-ci-workflow.yml's `Anparasan3/gh-actions/dependabot` step
+# creates this file automatically on first push to main if it's missing.
+# Copy this file manually only if you want it without waiting for that push,
+# or want to customize it before the bootstrap step would run.
 
 version: 2
 updates:

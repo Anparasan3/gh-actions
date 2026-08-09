@@ -4,14 +4,20 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
 
 jobs:
   ci:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed only for the dependabot bootstrap step below
     steps:
       - uses: actions/checkout@v7
+
+      - name: Ensure dependabot.yml exists
+        if: github.event_name == 'push'
+        uses: Anparasan3/gh-actions/dependabot@v0.1.0
 
       - name: Setup Bun & install deps
         uses: Anparasan3/gh-actions/setup-bun@v0.1.0
