@@ -35,11 +35,13 @@ jobs:
           }
           EOF
 
-      - name: Run CI action with build disabled
+      - name: Run CI action with lint+test enabled, build disabled
         uses: ./
         with:
           working-directory: /tmp/fixture
           install: 'false'
+          enable-lint: 'true'
+          enable-test: 'true'
           enable-build: 'false'
 
       - name: Assert lint/test ran and build was skipped
