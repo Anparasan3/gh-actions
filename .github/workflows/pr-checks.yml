@@ -1,0 +1,218 @@
+name: PR Checks (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      # ── Feature toggles ────────────────────────────────────────────────────
+      enable-jira-link:
+        description: 'Require a Jira ticket (DEV-123 style) in PR title/body and link the PR to it'
+        type: boolean
+        default: false
+      enable-coverage:
+        description: 'Post a test coverage report as a PR comment'
+        type: boolean
+        default: false
+      enable-deploy:
+        description: 'Deploy to staging after tests pass'
+        type: boolean
+        default: false
+      enable-healthcheck:
+        description: 'Hit a healthcheck URL after deploy (only runs if enable-deploy is also true)'
+        type: boolean
+        default: false
+
+      # ── Dynamic config ─────────────────────────────────────────────────────
+      bun-version:
+        description: 'Bun version to install'
+        type: string
+        default: 'latest'
+      lint-script:
+        description: 'package.json script to run for lint'
+        type: string
+        default: 'lint'
+      test-script:
+        description: 'package.json script to run for tests'
+        type: string
+        default: 'test'
+      deploy-script:
+        description: 'package.json script to run for deploy (only used if enable-deploy is true)'
+        type: string
+        default: 'deploy:staging'
+      healthcheck-url:
+        description: 'URL to curl after deploy, expects JSON with a "status" field equal to "ok" (only used if enable-healthcheck is true)'
+        type: string
+        default: ''
+      aws-region:
+        description: 'AWS region for deploy step'
+        type: string
+        default: 'us-east-1'
+      ticket-prefix:
+        description: 'Ticket key prefix to look for in PR title/body, e.g. DEV matches DEV-123'
+        type: string
+        default: 'DEV'
+
+    secrets:
+      JIRA_EMAIL:
+        required: false
+      JIRA_API_TOKEN:
+        required: false
+      JIRA_DOMAIN:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      DEPLOY_ENV_VARS:
+        description: 'Optional JSON string of extra env vars to inject into the deploy step, e.g. {"MAGENTO_DATABASE_URL":"...","ACCOUNT_DATABASE_URL":"..."}'
+        required: false
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # ── Jira link (optional) ────────────────────────────────────────────
+      - name: Fetch latest PR data
+        id: check_pr
+        if: inputs.enable-jira-link
+        shell: pwsh
+        run: |
+          $GITHUB_TOKEN = "${{ secrets.GITHUB_TOKEN }}"
+          $PR_NUMBER = ${{ github.event.pull_request.number }}
+          $REPO = "${{ github.repository }}"
+          $TICKET_PREFIX = "${{ inputs.ticket-prefix }}"
+          $PR_DATA = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" -Headers @{
+            Authorization = "token $GITHUB_TOKEN"
+            Accept = "application/vnd.github.v3+json"
+          }
+          $PR_TITLE = $PR_DATA.title
+          $PR_BODY = $PR_DATA.body
+
+          $PR_TEXT = @"
+            $PR_TITLE
+            $PR_BODY
+          "@
+
+          # remove html comments from pr_body
+          $PR_TEXT = [regex]::Replace($PR_TEXT, '(?s)<!--.*?-->', '')
+
+          $pattern = "(?i)$TICKET_PREFIX-?\d+"
+
+          $TICKETS = @()
+          $TICKETS += [regex]::Matches($PR_TEXT, $pattern) | ForEach-Object { $_.Value }
+
+          $TICKETS = $TICKETS | ForEach-Object { $_ -replace "(?i)($TICKET_PREFIX)(\d+)", "$TICKET_PREFIX-`$2" } | Select-Object -Unique
+          $TICKETS = $TICKETS | Where-Object { $_ -notmatch '-000$' }
+
+          if ($TICKETS.Count -eq 0) {
+            if ("${{ github.event.pull_request.draft }}" -eq "true") {
+              Write-Output "Warning: PR is a draft and does not contain '$TICKET_PREFIX-{number}'"
+            } else {
+              Write-Error "Error: PR title and/or description must contain '$TICKET_PREFIX-{number}'"
+              exit 1
+            }
+          }
+
+          $TICKETS = $TICKETS | Select-Object -Unique
+          Write-Output "Found tickets: $($TICKETS -join ', ')"
+          "dev_tickets=$($TICKETS -join ',')" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Link PR to Jira
+        if: inputs.enable-jira-link && steps.check_pr.outputs.dev_tickets != ''
+        shell: pwsh
+        run: |
+          $TICKETS = "${{ steps.check_pr.outputs.dev_tickets }}".Split(',')
+          $JIRA_EMAIL = "${{ secrets.JIRA_EMAIL }}"
+          $JIRA_API_TOKEN = "${{ secrets.JIRA_API_TOKEN }}"
+          $JIRA_DOMAIN = "${{ secrets.JIRA_DOMAIN }}"
+          $PR_URL = "${{ github.event.pull_request.html_url }}"
+
+          foreach ($TICKET in $TICKETS) {
+            $JIRA_API_URL = "https://${JIRA_DOMAIN}/rest/api/3/issue/${TICKET}/remotelink"
+            $links = Invoke-RestMethod -Uri $JIRA_API_URL -Method Get -Headers @{
+              Authorization = "Basic $([Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${JIRA_EMAIL}:${JIRA_API_TOKEN}")))"
+              "Content-Type" = "application/json"
+            }
+
+            $github_link = $links | Where-Object { $_.object.url -eq $PR_URL }
+            if ($github_link) {
+              continue
+            }
+
+            $PAYLOAD = @{
+              object = @{
+                url = $PR_URL
+                title = "GitHub PR: $PR_URL"
+              }
+            } | ConvertTo-Json
+
+            Invoke-RestMethod -Uri $JIRA_API_URL -Method Post -Headers @{
+              Authorization = "Basic $([Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${JIRA_EMAIL}:${JIRA_API_TOKEN}")))"
+              "Content-Type" = "application/json"
+            } -Body $PAYLOAD
+          }
+
+      # ── Setup, lint, test (always run) ──────────────────────────────────
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Configure npm for GitHub Packages
+        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Lint
+        run: bun run ${{ inputs.lint-script }}
+
+      - name: Run tests
+        run: bun run ${{ inputs.test-script }}
+        env:
+          FORCE_COLOR: 1
+
+      # ── Coverage report (optional) ──────────────────────────────────────
+      - name: Report coverage
+        if: inputs.enable-coverage
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          delete-old-comments: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Deploy (optional) ────────────────────────────────────────────────
+      # Note: GitHub Actions does not allow referencing secrets.X directly in
+      # an `if:` condition, so this step always runs when deploy is enabled and
+      # simply no-ops if DEPLOY_ENV_VARS is empty.
+      - name: Inject extra deploy env vars
+        if: inputs.enable-deploy
+        shell: bash
+        env:
+          DEPLOY_ENV_VARS: ${{ secrets.DEPLOY_ENV_VARS }}
+        run: |
+          if [ -n "$DEPLOY_ENV_VARS" ]; then
+            echo "$DEPLOY_ENV_VARS" | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          fi
+
+      - name: Deploy
+        if: inputs.enable-deploy
+        run: bun run ${{ inputs.deploy-script }}
+        env:
+          FORCE_COLOR: 1
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ inputs.aws-region }}
+
+      # ── Healthcheck (optional, requires deploy) ─────────────────────────
+      - name: Healthcheck
+        if: inputs.enable-deploy && inputs.enable-healthcheck && inputs.healthcheck-url != ''
+        run: |
+          response=$(curl -s "${{ inputs.healthcheck-url }}")
+          echo "$response"
+          statusProperty=$(echo "$response" | jq -r '.status')
+          if [ "$statusProperty" != "ok" ]; then
+            exit 1
+          fi

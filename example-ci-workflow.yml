@@ -1,0 +1,26 @@
+# Copy this file into your project as .github/workflows/ci.yml
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Bun & install deps
+        uses: Anparasan3/gh-actions/setup-bun@v0.1.0
+
+      - name: Lint
+        uses: Anparasan3/gh-actions/lint@v0.1.0
+
+      - name: Test
+        uses: Anparasan3/gh-actions/test@v0.1.0
+
+      - name: Build
+        uses: Anparasan3/gh-actions/build@v0.1.0

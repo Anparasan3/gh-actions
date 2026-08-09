@@ -1,0 +1,39 @@
+name: 'Calculate Next Version'
+description: 'Calculates the next semver tag based on existing tags and a bump type (patch/minor/major)'
+
+inputs:
+  bump:
+    description: 'Version bump type: patch, minor, or major'
+    required: true
+    default: 'patch'
+
+outputs:
+  tag:
+    description: 'The calculated next version tag (e.g. v1.2.3)'
+    value: ${{ steps.version.outputs.tag }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Calculate next version
+      id: version
+      shell: bash
+      run: |
+        latest=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+        latest=${latest:-v0.0.0}
+        echo "Current: $latest"
+
+        major=$(echo "$latest" | cut -d. -f1 | tr -d 'v')
+        minor=$(echo "$latest" | cut -d. -f2)
+        patch=$(echo "$latest" | cut -d. -f3)
+
+        case "${{ inputs.bump }}" in
+          major) major=$((major + 1)); minor=0; patch=0 ;;
+          minor) minor=$((minor + 1)); patch=0 ;;
+          patch) patch=$((patch + 1)) ;;
+          *) echo "Unknown bump type: ${{ inputs.bump }}"; exit 1 ;;
+        esac
+
+        next="v${major}.${minor}.${patch}"
+        echo "Next: $next"
+        echo "tag=$next" >> "$GITHUB_OUTPUT"

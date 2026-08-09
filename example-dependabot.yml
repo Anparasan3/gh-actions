@@ -1,0 +1,27 @@
+# Copy this file into your project as .github/dependabot.yml
+# Dependabot config lives per-repo -- it cannot be "shared" via uses:,
+# so each project needs its own copy of this file.
+
+version: 2
+updates:
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: '00:00'
+      timezone: UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "Dependabot"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: '00:00'
+      timezone: UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "Dependabot"
+      include: "scope"

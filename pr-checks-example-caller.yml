@@ -1,0 +1,32 @@
+# Copy this file into your project as .github/workflows/pr-checks.yml
+# Configure the toggles/inputs per-project; secrets are pulled from that
+# project's own repo secrets (Settings -> Secrets and variables -> Actions).
+
+name: Pull Request Checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  checks:
+    uses: Anparasan3/gh-actions/.github/workflows/pr-checks.yml@v0.1.0
+    with:
+      enable-jira-link: true
+      enable-coverage: true
+      enable-deploy: true
+      enable-healthcheck: true
+      bun-version: latest
+      lint-script: lint
+      test-script: test
+      deploy-script: deploy:staging
+      healthcheck-url: https://your-app.example.com/healthcheck
+      aws-region: us-east-1
+      ticket-prefix: DEV
+    secrets:
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_DOMAIN: ${{ secrets.JIRA_DOMAIN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.NONPROD_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.NONPROD_AWS_SECRET_ACCESS_KEY }}
+      DEPLOY_ENV_VARS: ${{ secrets.DEPLOY_ENV_VARS }}
